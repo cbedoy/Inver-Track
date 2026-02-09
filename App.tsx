@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -9,26 +9,45 @@ import {
   RefreshCw,
   Sparkles,
   Calendar,
-  ArrowUpRight
+  ArrowUpRight,
+  Save
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Investment, PortfolioSummary } from './types';
 import { GoogleGenAI } from "@google/genai";
 
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
+const STORAGE_KEY = 'invertrack_investments_v1';
 
 const App: React.FC = () => {
-  const [investments, setInvestments] = useState<Investment[]>([
-    { id: '1', name: 'Open Bank', amount: 2230450.09, annualYield: 11.76 },
-    { id: '2', name: 'Didi', amount: 160.16, annualYield: 0.00 },
-    { id: '3', name: 'Efectivo', amount: 0.08, annualYield: 0.00 },
-    { id: '4', name: 'ML (Mercado Libre)', amount: 249820.13, annualYield: 9.16 },
-    { id: '5', name: 'Nu', amount: 247800.13, annualYield: 9.08 }
-  ]);
+  // Inicialización inteligente: Intentar cargar de Local Storage o usar valores por defecto
+  const [investments, setInvestments] = useState<Investment[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Error al cargar datos guardados:", e);
+      }
+    }
+    // Valores por defecto solicitados
+    return [
+      { id: '1', name: 'Open Bank', amount: 223045, annualYield: 0.09 },
+      { id: '2', name: 'Didi', amount: 16, annualYield: 0.16 },
+      { id: '3', name: 'Efectivo', amount: 0.085, annualYield: 0.00 },
+      { id: '4', name: 'ML', amount: 24982, annualYield: 0.13 },
+      { id: '5', name: 'Nu', amount: 24780, annualYield: 0.13 }
+    ];
+  });
 
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [projectionDays, setProjectionDays] = useState<number>(30);
+
+  // Guardar en Local Storage cada vez que cambien las inversiones
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(investments));
+  }, [investments]);
 
   const summary = useMemo<PortfolioSummary>(() => {
     const totalAmount = investments.reduce((sum, inv) => sum + inv.amount, 0);
@@ -39,19 +58,18 @@ const App: React.FC = () => {
     return { totalAmount, weightedAverageYield, monthlyIncome };
   }, [investments]);
 
-  // Formateador de fechas en español
   const dateFormatter = useMemo(() => new Intl.DateTimeFormat('es-MX', {
     day: 'numeric',
     month: 'short',
     year: 'numeric'
   }), []);
 
-  // Daily Projection Data Generation with Dates
   const dailyProjection = useMemo(() => {
     const data = [];
     let currentCapital = summary.totalAmount;
-    // Tasa diaria equivalente a la tasa anual compuesta
-    const dailyRate = Math.pow(1 + summary.weightedAverageYield / 100, 1 / 365) - 1;
+    const dailyRate = summary.weightedAverageYield > 0 
+      ? Math.pow(1 + summary.weightedAverageYield / 100, 1 / 365) - 1 
+      : 0;
     
     const startDate = new Date();
 
@@ -89,7 +107,9 @@ const App: React.FC = () => {
   };
 
   const deleteInvestment = (id: string) => {
-    setInvestments(investments.filter(inv => inv.id !== id));
+    if (window.confirm("¿Estás seguro de que quieres eliminar esta cuenta?")) {
+      setInvestments(investments.filter(inv => inv.id !== id));
+    }
   };
 
   const formatCurrency = (val: number) => {
@@ -138,13 +158,19 @@ const App: React.FC = () => {
             </div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">InverTrack</h1>
           </div>
-          <button 
-            onClick={addInvestment}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all shadow-md active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Nueva Inversión</span>
-          </button>
+          <div className="flex items-center gap-3">
+             <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md uppercase tracking-wider">
+               <Save className="w-3 h-3" />
+               Auto-guardado activo
+             </div>
+            <button 
+              onClick={addInvestment}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all shadow-md active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Nueva Inversión</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -152,7 +178,7 @@ const App: React.FC = () => {
         
         {/* Summary Cards */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-md">
             <p className="text-sm font-medium text-slate-500 mb-1">Capital Total</p>
             <h2 className="text-3xl font-bold text-slate-900">{formatCurrency(summary.totalAmount)}</h2>
             <div className="mt-4 text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full w-fit text-xs font-semibold">
@@ -160,7 +186,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-md">
             <p className="text-sm font-medium text-slate-500 mb-1">Rendimiento Promedio</p>
             <h2 className="text-3xl font-bold text-emerald-600">{summary.weightedAverageYield.toFixed(2)}% <span className="text-sm text-slate-400 font-normal">anual</span></h2>
             <div className="mt-4 text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full w-fit text-xs font-semibold">
@@ -168,7 +194,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-md">
             <p className="text-sm font-medium text-slate-500 mb-1">Ganancia Estimada Mes</p>
             <h2 className="text-3xl font-bold text-slate-900">{formatCurrency(summary.monthlyIncome)}</h2>
             <div className="mt-4 text-amber-600 bg-amber-50 px-3 py-1 rounded-full w-fit text-xs font-semibold">
@@ -185,7 +211,7 @@ const App: React.FC = () => {
               <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                 <h3 className="font-semibold text-slate-800 flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-indigo-500" />
-                  Cuentas de Inversión
+                  Mis Cuentas
                 </h3>
               </div>
               <div className="overflow-x-auto">
@@ -193,8 +219,8 @@ const App: React.FC = () => {
                   <thead className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                     <tr>
                       <th className="px-6 py-4">Entidad</th>
-                      <th className="px-6 py-4">Monto</th>
-                      <th className="px-6 py-4">Tasa Anual</th>
+                      <th className="px-6 py-4">Monto ($)</th>
+                      <th className="px-6 py-4">Tasa Anual (%)</th>
                       <th className="px-6 py-4 text-right"></th>
                     </tr>
                   </thead>
@@ -202,20 +228,27 @@ const App: React.FC = () => {
                     {investments.map((inv) => (
                       <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4">
-                          <input type="text" value={inv.name} onChange={(e) => updateInvestment(inv.id, 'name', e.target.value)} className="bg-transparent border-none focus:ring-0 font-medium text-slate-700 w-full" placeholder="Ej. Nu Bank" />
+                          <input type="text" value={inv.name} onChange={(e) => updateInvestment(inv.id, 'name', e.target.value)} className="bg-transparent border-none focus:ring-0 font-medium text-slate-700 w-full" placeholder="Nombre de la cuenta" />
                         </td>
                         <td className="px-6 py-4">
                           <input type="number" value={inv.amount || ''} onChange={(e) => updateInvestment(inv.id, 'amount', parseFloat(e.target.value) || 0)} className="bg-transparent border-none focus:ring-0 font-semibold text-slate-900 w-full" />
                         </td>
                         <td className="px-6 py-4 flex items-center gap-1">
-                          <input type="number" value={inv.annualYield || ''} step="0.01" onChange={(e) => updateInvestment(inv.id, 'annualYield', parseFloat(e.target.value) || 0)} className="bg-transparent border-none focus:ring-0 text-emerald-600 font-bold w-16" />
+                          <input type="number" value={inv.annualYield || ''} step="0.01" onChange={(e) => updateInvestment(inv.id, 'annualYield', parseFloat(e.target.value) || 0)} className="bg-transparent border-none focus:ring-0 text-emerald-600 font-bold w-16 text-right" />
                           <span className="text-slate-400">%</span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button onClick={() => deleteInvestment(inv.id)} className="text-slate-300 hover:text-red-500 p-2 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                          <button onClick={() => deleteInvestment(inv.id)} className="text-slate-300 hover:text-red-500 p-2 transition-colors" title="Eliminar cuenta"><Trash2 className="w-4 h-4" /></button>
                         </td>
                       </tr>
                     ))}
+                    {investments.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">
+                          No tienes cuentas registradas. Agrega una para comenzar.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -226,14 +259,14 @@ const App: React.FC = () => {
               <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
                 <h3 className="font-semibold text-slate-800 flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-indigo-600" />
-                  Proyección Día a Día
+                  Rendimiento Diario Estimado
                 </h3>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-slate-500 font-medium">Periodo:</span>
+                  <span className="text-xs text-slate-500 font-medium text-nowrap">Periodo:</span>
                   <select 
                     value={projectionDays} 
                     onChange={(e) => setProjectionDays(Number(e.target.value))}
-                    className="text-xs font-bold bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                    className="text-xs font-bold bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all shadow-sm cursor-pointer"
                   >
                     <option value={7}>Próximos 7 días</option>
                     <option value={30}>Próximos 30 días</option>
@@ -256,8 +289,8 @@ const App: React.FC = () => {
                   <thead className="bg-slate-50/80 sticky top-0 backdrop-blur-sm text-slate-500 font-bold uppercase text-[10px] tracking-widest border-b border-slate-100">
                     <tr>
                       <th className="px-6 py-3">Fecha</th>
-                      <th className="px-6 py-3">Interés Generado</th>
-                      <th className="px-6 py-3">Capital Acumulado</th>
+                      <th className="px-6 py-3">Interés Ganado</th>
+                      <th className="px-6 py-3">Saldo Final Día</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -291,7 +324,7 @@ const App: React.FC = () => {
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
               <h3 className="font-semibold text-slate-800 flex items-center gap-2 mb-6">
                 <PieIcon className="w-4 h-4 text-indigo-500" />
-                Distribución
+                Composición del Capital
               </h3>
               <div className="h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -317,11 +350,11 @@ const App: React.FC = () => {
               <div className="mt-4 space-y-2">
                 {investments.filter(i => i.amount > 0).map((inv, idx) => (
                   <div key={inv.id} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
-                      {inv.name}
+                    <div className="flex items-center gap-2 text-slate-600 truncate mr-2">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
+                      <span className="truncate">{inv.name || 'Sin nombre'}</span>
                     </div>
-                    <span className="font-bold text-slate-900">{((inv.amount / summary.totalAmount) * 100).toFixed(1)}%</span>
+                    <span className="font-bold text-slate-900 shrink-0">{summary.totalAmount > 0 ? ((inv.amount / summary.totalAmount) * 100).toFixed(1) : 0}%</span>
                   </div>
                 ))}
               </div>
@@ -349,7 +382,7 @@ const App: React.FC = () => {
               ) : (
                 <div className="flex flex-col items-center justify-center py-6 text-slate-400">
                   <Sparkles className="w-8 h-8 mb-2 opacity-10" />
-                  <p className="text-xs text-center px-4 italic">Presiona el icono de recargar para obtener consejos de inversión personalizados.</p>
+                  <p className="text-xs text-center px-4 italic">Presiona el icono de recargar para obtener consejos de inversión personalizados con Gemini.</p>
                 </div>
               )}
             </div>
