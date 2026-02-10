@@ -219,6 +219,13 @@ const App: React.FC = () => {
     }
   };
 
+  // Datos filtrados para el gráfico de pastel (solo inversiones con capital mayor a 0)
+  const chartData = useMemo(() => {
+    return data.investments
+      .filter(inv => inv.amount > 0)
+      .map(inv => ({ name: inv.name || 'Sin nombre', value: inv.amount }));
+  }, [data.investments]);
+
   return (
     <div className="min-h-screen bg-slate-50 pb-32">
       {/* Header */}
@@ -368,70 +375,120 @@ const App: React.FC = () => {
               </div>
             </section>
 
-            {/* Inversiones Detalladas */}
-            <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-              <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider">
-                  <TrendingUp className="w-4 h-4 text-indigo-500" />
-                  Distribución de Capital
+            {/* Nueva Sección: Gráfico de Distribución + Tabla de Inversiones */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+              {/* Gráfico de Pastel de Composición */}
+              <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex flex-col">
+                <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider mb-6">
+                  <PieIcon className="w-4 h-4 text-indigo-500" />
+                  Composición
                 </h3>
+                <div className="h-64 w-full relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={chartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                        nameKey="name"
+                        stroke="none"
+                      >
+                        {chartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value: number) => formatCurrency(value)}
+                        contentStyle={{ 
+                          borderRadius: '16px', 
+                          border: 'none', 
+                          boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                          fontSize: '12px',
+                          fontWeight: '900'
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  {chartData.map((entry, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <span className="text-[10px] font-bold text-slate-500 uppercase truncate">{entry.name}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                    <tr>
-                      <th className="px-8 py-4">Cuenta / Entidad</th>
-                      <th className="px-8 py-4">Monto ($)</th>
-                      <th className="px-8 py-4">Tasa Anual (%)</th>
-                      <th className="px-8 py-4"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {data.investments.map((inv) => (
-                      <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-8 py-5">
-                          <input 
-                            type="text" 
-                            value={inv.name} 
-                            onChange={(e) => updateInvestment(inv.id, 'name', e.target.value)} 
-                            className="bg-transparent border-none focus:ring-0 font-black text-slate-700 w-full text-sm" 
-                            placeholder="Nombre de cuenta" 
-                          />
-                        </td>
-                        <td className="px-8 py-5">
-                          <input 
-                            type="number" 
-                            value={inv.amount || ''} 
-                            onChange={(e) => updateInvestment(inv.id, 'amount', parseFloat(e.target.value) || 0)} 
-                            className="bg-transparent border-none focus:ring-0 font-black text-slate-900 w-full text-sm" 
-                          />
-                        </td>
-                        <td className="px-8 py-5 flex items-center gap-1">
-                          <input 
-                            type="number" 
-                            value={inv.annualYield || ''} 
-                            step="0.01" 
-                            onChange={(e) => updateInvestment(inv.id, 'annualYield', parseFloat(e.target.value) || 0)} 
-                            className="bg-transparent border-none focus:ring-0 text-emerald-600 font-black w-20 text-sm text-right" 
-                          />
-                          <span className="text-slate-400 font-bold text-xs">%</span>
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <button 
-                            onClick={() => setData(prev => ({ ...prev, investments: prev.investments.filter(i => i.id !== inv.id)}))} 
-                            className="text-slate-300 hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
+
+              {/* Inversiones Detalladas */}
+              <div className="xl:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                  <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider">
+                    <TrendingUp className="w-4 h-4 text-indigo-500" />
+                    Detalle de Inversiones
+                  </h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                      <tr>
+                        <th className="px-8 py-4">Entidad</th>
+                        <th className="px-8 py-4">Capital ($)</th>
+                        <th className="px-8 py-4">Rend. (%)</th>
+                        <th className="px-8 py-4"></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {data.investments.map((inv) => (
+                        <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-8 py-5">
+                            <input 
+                              type="text" 
+                              value={inv.name} 
+                              onChange={(e) => updateInvestment(inv.id, 'name', e.target.value)} 
+                              className="bg-transparent border-none focus:ring-0 font-black text-slate-700 w-full text-sm" 
+                              placeholder="Nombre" 
+                            />
+                          </td>
+                          <td className="px-8 py-5">
+                            <input 
+                              type="number" 
+                              value={inv.amount || ''} 
+                              onChange={(e) => updateInvestment(inv.id, 'amount', parseFloat(e.target.value) || 0)} 
+                              className="bg-transparent border-none focus:ring-0 font-black text-slate-900 w-full text-sm" 
+                            />
+                          </td>
+                          <td className="px-8 py-5 flex items-center gap-1">
+                            <input 
+                              type="number" 
+                              value={inv.annualYield || ''} 
+                              step="0.01" 
+                              onChange={(e) => updateInvestment(inv.id, 'annualYield', parseFloat(e.target.value) || 0)} 
+                              className="bg-transparent border-none focus:ring-0 text-emerald-600 font-black w-16 text-sm text-right" 
+                            />
+                            <span className="text-slate-400 font-bold text-xs">%</span>
+                          </td>
+                          <td className="px-8 py-5 text-right">
+                            <button 
+                              onClick={() => setData(prev => ({ ...prev, investments: prev.investments.filter(i => i.id !== inv.id)}))} 
+                              className="text-slate-300 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 
-            {/* TABLA DE CRECIMIENTO DIARIO (PROYECCIÓN HASTA 1 AÑO) */}
+            {/* TABLA DE CRECIMIENTO DIARIO */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
               <div className="px-8 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-indigo-50/30">
                 <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider">
